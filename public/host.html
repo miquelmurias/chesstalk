@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChessTalk — Host</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#111827; --card-2:#1e293b;
+    --primary:#3b82f6; --primary-dark:#1d4ed8;
+    --speak:#22c55e; --speak-dark:#15803d;
+    --stop:#ef4444; --hand:#f59e0b;
+    --idle:#475569; --text:#f1f5f9; --muted:#94a3b8; --border:#293548;
+    --radius:20px;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);padding:20px;}
+
+  .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+  .brand{display:flex;align-items:center;gap:10px;font-size:24px;font-weight:800;color:#93c5fd;}
+  .top-right{display:flex;align-items:center;gap:12px;}
+  .room-code{background:var(--card);border:2px solid var(--border);border-radius:14px;padding:10px 18px;font-size:15px;color:var(--muted);}
+  .room-code b{color:var(--text);font-size:24px;letter-spacing:4px;margin-left:8px;}
+  .ghost-btn{background:var(--card);border:2px solid var(--border);color:var(--text);border-radius:12px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;}
+  .ghost-btn:hover{border-color:var(--primary);}
+
+  /* Setup screen */
+  .setup{max-width:480px;margin:60px auto;background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px;text-align:center;}
+  .setup h1{font-size:22px;margin-bottom:8px;}
+  .setup p{color:var(--muted);font-size:15px;margin-bottom:24px;}
+  .field{margin-bottom:18px;text-align:left;}
+  .field label{font-size:13px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;}
+  .field input{width:100%;padding:12px 14px;font-size:16px;border-radius:12px;border:2px solid var(--border);background:var(--card-2);color:var(--text);}
+  .primary-btn{width:100%;background:var(--primary);color:#fff;border:none;padding:16px;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;}
+  .primary-btn:hover{background:var(--primary-dark);}
+
+  .hidden{display:none;}
+
+  /* ===== PROJECTION AREA (big, for everyone to see) ===== */
+  .spotlight{
+    background:var(--card);border:1px solid var(--border);border-radius:28px;
+    text-align:center;padding:34px 20px;position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    min-height:220px;margin-bottom:20px;
+  }
+  .live-dot{position:absolute;top:22px;left:26px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:800;color:var(--stop);text-transform:uppercase;letter-spacing:1.5px;}
+  .live-dot .dot{width:12px;height:12px;border-radius:50%;background:var(--stop);animation:pulse 1.2s infinite;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,.6);}70%{box-shadow:0 0 0 16px rgba(239,68,68,0);}100%{box-shadow:0 0 0 0 rgba(239,68,68,0);}}
+  .speaker-name{font-size:34px;font-weight:800;}
+  .speaker-timer{font-size:110px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.05;margin:6px 0;color:#93c5fd;}
+  .speaker-timer.warn{color:var(--hand);}
+  .speaker-timer.critical{color:var(--stop);animation:blink 1s infinite;}
+  @keyframes blink{50%{opacity:.4;}}
+  .progress-track{width:70%;height:14px;background:var(--border);border-radius:8px;overflow:hidden;margin-top:8px;}
+  .progress-fill{height:100%;background:linear-gradient(90deg,var(--speak),var(--primary));transition:width .3s linear;}
+  .no-speaker{color:var(--muted);font-size:22px;}
+  .no-speaker .big-icon{font-size:54px;display:block;margin-bottom:10px;}
+
+  .queue-card{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:18px 22px;margin-bottom:20px;}
+  .section-title{font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:0 0 12px 0;}
+  .queue-row{display:flex;gap:12px;flex-wrap:wrap;}
+  .queue-chip{display:flex;align-items:center;gap:10px;background:#3a2a09;border:2px solid var(--hand);color:#fbbf24;padding:10px 18px;border-radius:999px;font-weight:800;font-size:18px;}
+  .queue-chip .badge{background:var(--hand);color:#1e293b;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .empty-hint{color:var(--muted);font-size:16px;}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;}
+  .p-card{border:2px solid var(--border);border-radius:20px;padding:20px;display:flex;flex-direction:column;gap:10px;background:var(--card);transition:border-color .2s, box-shadow .2s;}
+  .p-card.speaking{border-color:var(--speak);box-shadow:0 0 0 4px rgba(34,197,94,0.18);}
+  .p-card.hand-raised{border-color:var(--hand);}
+  .p-card.offline{opacity:.55;}
+  .offline-badge{font-size:14px;}
+  .p-name{font-weight:800;font-size:19px;}
+  .p-time{font-size:48px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .p-time.warn{color:var(--hand);}
+  .p-time.critical{color:var(--stop);}
+  .p-status{font-size:13px;font-weight:800;padding:5px 12px;border-radius:999px;display:inline-block;width:fit-content;text-transform:uppercase;letter-spacing:.5px;}
+  .status-speaking{background:#0f3d22;color:#4ade80;}
+  .status-hand{background:#3a2a09;color:#fbbf24;}
+  .status-idle{background:#1e293b;color:var(--muted);}
+  .empty-participants{color:var(--muted);font-size:16px;text-align:center;padding:24px;}
+
+  /* ===== CONTROL PANEL (hideable, not meant for projection) ===== */
+  .control-panel{background:var(--card-2);border:2px dashed var(--border);border-radius:20px;padding:18px 20px;margin-top:24px;}
+  .control-panel .section-title{color:#cbd5e1;}
+  .control-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;border-bottom:1px solid var(--border);}
+  .control-row:last-child{border-bottom:none;}
+  .control-row .cname{font-weight:700;min-width:120px;flex:1;}
+  .control-row input[type=number]{width:80px;padding:8px;border-radius:8px;border:2px solid var(--border);background:var(--card);color:var(--text);font-size:14px;}
+  .mini-btn{border:none;border-radius:8px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer;}
+  .mini-btn.save{background:var(--primary);color:#fff;}
+  .mini-btn.reset{background:#334155;color:#e2e8f0;}
+  .mini-btn.kick{background:#7f1d1d;color:#fecaca;}
+  .default-time-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .default-time-row input{width:80px;padding:8px;border-radius:8px;border:2px solid var(--border);background:var(--card);color:var(--text);}
+</style>
+</head>
+<body>
+
+  <!-- SETUP SCREEN -->
+  <div class="setup" id="setupScreen">
+    <h1>🕐 ChessTalk</h1>
+    <p>Crea una sessió nova per moderar el vostre debat.</p>
+    <div class="field">
+      <label for="defaultTime">Temps per participant (minuts)</label>
+      <input type="number" id="defaultTime" value="3" min="1" max="30">
+    </div>
+    <button class="primary-btn" id="createBtn">Crear sessió</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="dashboard" class="hidden">
+    <div class="topbar">
+      <div class="brand"><span>🕐</span> ChessTalk</div>
+      <div class="top-right">
+        <div class="room-code">Codi: <b id="roomCodeLabel">------</b></div>
+        <button class="ghost-btn" id="toggleLock">🔓 Bloquejar sessió</button>
+        <button class="ghost-btn" id="toggleControls">⚙️ Controls</button>
+      </div>
+    </div>
+
+    <div class="spotlight" id="spotlight"></div>
+
+    <div class="queue-card">
+      <p class="section-title">✋ Cua de mans aixecades</p>
+      <div class="queue-row" id="queueRow"></div>
+    </div>
+
+    <div>
+      <p class="section-title">👥 Participants</p>
+      <div class="grid" id="participantsGrid"></div>
+    </div>
+
+    <div class="control-panel hidden" id="controlPanel">
+      <p class="section-title">⚙️ Controls del host — recorda amagar-los abans de projectar</p>
+      <div id="controlList"></div>
+    </div>
+  </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+const setupScreen = document.getElementById("setupScreen");
+const dashboard = document.getElementById("dashboard");
+const roomCodeLabel = document.getElementById("roomCodeLabel");
+const spotlight = document.getElementById("spotlight");
+const queueRow = document.getElementById("queueRow");
+const participantsGrid = document.getElementById("participantsGrid");
+const controlPanel = document.getElementById("controlPanel");
+const controlList = document.getElementById("controlList");
+
+document.getElementById("toggleControls").addEventListener("click", ()=>{
+  controlPanel.classList.toggle("hidden");
+});
+
+const toggleLockBtn = document.getElementById("toggleLock");
+let roomLocked = false;
+toggleLockBtn.addEventListener("click", ()=>{
+  socket.emit(roomLocked ? "unlock-room" : "lock-room");
+});
+
+document.getElementById("createBtn").addEventListener("click", ()=>{
+  const minutes = parseFloat(document.getElementById("defaultTime").value) || 3;
+  socket.emit("create-room", { defaultTime: Math.round(minutes * 60) }, (res)=>{
+    if(!res.ok) return;
+    roomCodeLabel.textContent = res.code;
+    setupScreen.classList.add("hidden");
+    dashboard.classList.remove("hidden");
+  });
+});
+
+function initials(name){ return name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase(); }
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec/60).toString().padStart(2,"0");
+  const s = (sec%60).toString().padStart(2,"0");
+  return `${m}:${s}`;
+}
+function timeClass(sec){
+  if(sec <= 10) return "critical";
+  if(sec <= 30) return "warn";
+  return "";
+}
+
+let latestState = null;
+
+socket.on("state", (state)=>{
+  latestState = state;
+  roomLocked = !!state.locked;
+  toggleLockBtn.textContent = roomLocked ? "🔒 Sessió bloquejada" : "🔓 Bloquejar sessió";
+  toggleLockBtn.title = roomLocked
+    ? "Ningú nou es pot unir. Clica per tornar a permetre-ho."
+    : "Impedeix que s'hi uneixi ningú més (els que ja hi són poden seguir reconnectant-se).";
+
+  const speaker = state.participants.find(p=>p.id===state.speakerId);
+
+  if(speaker){
+    const pct = Math.max(0, (speaker.remaining/speaker.total)*100);
+    spotlight.innerHTML = `
+      <div class="live-dot"><span class="dot"></span> En directe</div>
+      <div class="speaker-name">🎤 ${speaker.name} està parlant</div>
+      <div class="speaker-timer ${timeClass(speaker.remaining)}">${fmt(speaker.remaining)}</div>
+      <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+    `;
+  } else {
+    spotlight.innerHTML = `
+      <div class="no-speaker">
+        <span class="big-icon">🔇</span>
+        Ningú està parlant ara mateix<br>Esperant que algú vulgui intervenir…
+      </div>
+    `;
+  }
+
+  if(state.queue.length === 0){
+    queueRow.innerHTML = `<span class="empty-hint">Ningú ha aixecat la mà</span>`;
+  } else {
+    queueRow.innerHTML = state.queue.map((id,i)=>{
+      const p = state.participants.find(pp=>pp.id===id);
+      if(!p) return "";
+      return `<div class="queue-chip"><span class="badge">${i+1}</span> ${p.name}</div>`;
+    }).join("");
+  }
+
+  if(state.participants.length === 0){
+    participantsGrid.innerHTML = `<div class="empty-participants">Encara no s'ha unit ningú. Comparteix el codi <b>${state.code}</b>.</div>`;
+  } else {
+    participantsGrid.innerHTML = state.participants.map(p=>{
+      let cls = "p-card", statusHtml, statusClass;
+      if(p.id === state.speakerId){
+        cls += " speaking"; statusClass = "status-speaking"; statusHtml = "🎤 Parlant";
+      } else if(state.queue.includes(p.id)){
+        cls += " hand-raised"; statusClass = "status-hand";
+        statusHtml = `✋ Mà aixecada · Núm. ${state.queue.indexOf(p.id)+1}`;
+      } else {
+        statusClass = "status-idle"; statusHtml = "En espera";
+      }
+      if(p.connected === false) cls += " offline";
+      return `
+        <div class="${cls}">
+          <div class="p-name">${p.name}${p.connected === false ? ' <span class="offline-badge" title="Desconnectat temporalment">🔌</span>' : ''}</div>
+          <div class="p-time ${timeClass(p.remaining)}">${fmt(p.remaining)}</div>
+          <div class="p-status ${statusClass}">${statusHtml}</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  renderControlList(state);
+});
+
+function renderControlList(state){
+  if(state.participants.length === 0){
+    controlList.innerHTML = `<p class="empty-hint">Encara no hi ha participants per configurar.</p>`;
+    return;
+  }
+  controlList.innerHTML = state.participants.map(p=>`
+    <div class="control-row">
+      <div class="cname">${p.name}</div>
+      <input type="number" min="1" max="60" step="0.5" value="${(p.total/60).toFixed(1)}" id="time-${p.id}">
+      <button class="mini-btn save" data-action="save" data-id="${p.id}">Desa temps</button>
+      <button class="mini-btn reset" data-action="reset" data-id="${p.id}">Reiniciar rellotge</button>
+      <button class="mini-btn kick" data-action="kick" data-id="${p.id}">Expulsar</button>
+    </div>
+  `).join("");
+}
+
+controlList.addEventListener("click", (e)=>{
+  const btn = e.target.closest("button[data-action]");
+  if(!btn) return;
+  const action = btn.dataset.action;
+  const id = btn.dataset.id;
+
+  if(action === "save"){
+    const input = document.getElementById(`time-${id}`);
+    const minutes = parseFloat(input.value) || 1;
+    socket.emit("set-participant-time", { participantId: id, minutes });
+  } else if(action === "reset"){
+    socket.emit("reset-participant-time", { participantId: id });
+  } else if(action === "kick"){
+    const p = latestState && latestState.participants.find(pp=>pp.id===id);
+    if(confirm(`Segur que vols expulsar ${p ? p.name : 'aquest participant'}?`)){
+      socket.emit("kick-participant", { participantId: id });
+    }
+  }
+});
+</script>
+</body>
+</html>

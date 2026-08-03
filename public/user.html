@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ChessTalk — Participant</title>
+<style>
+  :root{
+    --bg:#f2f5fa; --card:#ffffff;
+    --primary:#2563eb; --primary-dark:#1e40af;
+    --speak:#22c55e; --speak-dark:#15803d;
+    --stop:#ef4444; --stop-dark:#b91c1c;
+    --hand:#f59e0b; --hand-dark:#92400e;
+    --disabled:#cbd5e1; --text:#1e293b; --muted:#64748b; --border:#e2e8f0;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{margin:0;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);display:flex;justify-content:center;padding:16px;}
+  .phone{width:100%;max-width:420px;display:flex;flex-direction:column;gap:16px;}
+
+  /* Join screen */
+  .join-card{background:var(--card);border:1px solid var(--border);border-radius:24px;padding:32px 26px;margin-top:40px;text-align:center;}
+  .join-card h1{font-size:24px;margin-bottom:6px;}
+  .join-card p{color:var(--muted);font-size:14px;margin-bottom:22px;}
+  .field{margin-bottom:16px;text-align:left;}
+  .field label{font-size:13px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;}
+  .field input{width:100%;padding:14px;font-size:18px;border-radius:12px;border:2px solid var(--border);text-align:center;letter-spacing:2px;}
+  .field input#nameInput{letter-spacing:normal;text-align:left;}
+  .primary-btn{width:100%;background:var(--primary);color:#fff;border:none;padding:16px;border-radius:14px;font-size:17px;font-weight:700;cursor:pointer;}
+  .error-msg{color:var(--stop-dark);font-size:14px;margin-top:10px;min-height:18px;}
+
+  .header{display:flex;justify-content:space-between;align-items:center;background:var(--card);border-radius:16px;padding:14px 18px;border:1px solid var(--border);}
+  .who{font-size:15px;color:var(--muted);}
+  .who b{color:var(--text);font-size:17px;}
+  .my-time{text-align:right;}
+  .my-time .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+  .my-time .val{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .my-time .val.low{color:var(--stop);}
+
+  .status-banner{text-align:center;padding:14px;border-radius:16px;font-weight:700;font-size:16px;}
+  .banner-open{background:#e0f2fe;color:#075985;}
+  .banner-listening{background:#f1f5f9;color:var(--muted);}
+  .banner-speaking{background:#fee2e2;color:var(--stop-dark);}
+  .banner-raised{background:#fef3c7;color:var(--hand-dark);}
+
+  .stage{background:var(--card);border-radius:24px;border:1px solid var(--border);padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:18px;min-height:260px;justify-content:center;}
+  .big-timer{font-size:56px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--stop-dark);}
+
+  button{font-family:inherit;border:none;cursor:pointer;}
+  .btn{width:100%;min-height:120px;border-radius:22px;font-size:26px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;transition:transform .1s, opacity .2s, background .2s;color:#fff;}
+  .btn:active{transform:scale(0.97);}
+  .btn .emoji{font-size:38px;}
+  .btn-speak{background:linear-gradient(180deg,var(--speak),var(--speak-dark));}
+  .btn-speak:disabled{background:var(--disabled);color:#fff;cursor:not-allowed;opacity:.8;}
+  .btn-stop{background:linear-gradient(180deg,var(--stop),var(--stop-dark));min-height:160px;font-size:30px;}
+  .btn-hand{background:linear-gradient(180deg,#fbbf24,var(--hand-dark));min-height:90px;font-size:20px;}
+  .btn-hand.raised{background:#fff;color:var(--hand-dark);border:3px solid var(--hand);}
+  .queue-pos{font-size:14px;color:var(--hand-dark);font-weight:700;}
+
+  .notes-card{background:var(--card);border-radius:20px;border:1px solid var(--border);padding:16px 18px;}
+  .notes-title{font-size:14px;font-weight:700;color:var(--muted);margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+  textarea{width:100%;min-height:110px;border-radius:14px;border:2px solid var(--border);padding:12px;font-size:16px;font-family:inherit;resize:vertical;color:var(--text);}
+  textarea:focus{outline:none;border-color:var(--primary);}
+  .notes-hint{font-size:11.5px;color:var(--muted);margin-top:6px;}
+  .hidden{display:none !important;}
+
+  .control-screen{display:flex;flex-direction:column;gap:16px;}
+
+  /* Screen edge glow that changes color depending on whether you can speak,
+     as a visual cue complementing the sound (in case someone doesn't hear it). */
+  .edge-glow{
+    position:fixed;inset:0;pointer-events:none;z-index:60;
+    box-shadow:inset 0 0 0 0 transparent;
+    transition:box-shadow .5s ease;
+  }
+  .edge-glow.state-green{box-shadow:inset 0 0 0 16px rgba(34,197,94,0.55);}
+  .edge-glow.state-amber{box-shadow:inset 0 0 0 16px rgba(245,158,11,0.5);}
+  .edge-glow.state-red{box-shadow:inset 0 0 0 10px rgba(239,68,68,0.32);}
+  .edge-glow.flash{animation:edgeFlash 1.1s ease-out;}
+  @keyframes edgeFlash{
+    0%{box-shadow:inset 0 0 0 46px rgba(34,197,94,0.9);}
+    100%{box-shadow:inset 0 0 0 16px rgba(34,197,94,0.55);}
+  }
+
+  /* Computers / wide screens: big, comfortable notes next to the controls */
+  @media (min-width:860px){
+    body{padding:32px;align-items:flex-start;}
+    .phone{max-width:1000px;}
+    .join-card{margin-top:80px;}
+    .control-screen{
+      max-width:1000px;width:100%;
+      display:grid;
+      grid-template-columns:1.4fr 380px;
+      grid-template-areas:
+        "notes header"
+        "notes banner"
+        "notes stage";
+      gap:20px;
+      align-items:start;
+    }
+    .header{grid-area:header;}
+    .status-banner{grid-area:banner;}
+    .stage{grid-area:stage;min-height:200px;}
+    .notes-card{grid-area:notes;display:flex;flex-direction:column;min-height:520px;}
+    .notes-card textarea{flex:1;min-height:440px;font-size:17px;}
+    .btn{min-height:88px;font-size:20px;}
+    .btn .emoji{font-size:26px;}
+    .btn-stop{min-height:110px;font-size:22px;}
+  }
+
+  .toast{
+    position:fixed;
+    left:50%;
+    bottom:24px;
+    transform:translateX(-50%) translateY(20px);
+    background:#1e293b;
+    color:#fff;
+    padding:12px 20px;
+    border-radius:999px;
+    font-size:14px;
+    font-weight:600;
+    opacity:0;
+    transition:opacity .25s, transform .25s;
+    pointer-events:none;
+    z-index:50;
+    max-width:90vw;
+    text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .reconnect-banner{
+    position:fixed;top:0;left:0;right:0;
+    background:#1e293b;color:#fbbf24;
+    text-align:center;font-size:13px;font-weight:700;
+    padding:8px;z-index:70;
+    letter-spacing:.3px;
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- JOIN SCREEN -->
+  <div class="join-card" id="joinScreen">
+    <h1>🕐 ChessTalk</h1>
+    <p>Introdueix el codi de la sessió i el teu nom per unir-te al debat.</p>
+    <div class="field">
+      <label for="codeInput">Codi de sessió</label>
+      <input type="text" id="codeInput" inputmode="numeric" maxlength="6" placeholder="000000">
+    </div>
+    <div class="field">
+      <label for="nameInput">El teu nom</label>
+      <input type="text" id="nameInput" maxlength="30" placeholder="Anna">
+    </div>
+    <button class="primary-btn" id="joinBtn">Unir-me</button>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- CONTROL SCREEN -->
+  <div id="controlScreen" class="control-screen hidden">
+    <div class="header">
+      <div class="who">Connectat com a<br><b id="myNameLabel"></b></div>
+      <div class="my-time">
+        <div class="label">El teu temps</div>
+        <div class="val" id="myTimeVal">00:00</div>
+      </div>
+    </div>
+
+    <div class="status-banner" id="statusBanner"></div>
+    <div class="stage" id="stage"></div>
+
+    <div class="notes-card">
+      <div class="notes-title">📝 Les teves notes</div>
+      <textarea id="notes" placeholder="Escriu aquí el que vols dir quan et toqui parlar…"></textarea>
+      <div class="notes-hint">Només visible per a tu en aquest dispositiu. No es desa enlloc.</div>
+    </div>
+  </div>
+
+</div>
+<div class="edge-glow" id="edgeGlow"></div>
+<div class="toast" id="toast"></div>
+<div class="reconnect-banner hidden" id="reconnectBanner">🔌 Reconnectant…</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+const joinScreen = document.getElementById("joinScreen");
+const controlScreen = document.getElementById("controlScreen");
+const errorMsg = document.getElementById("errorMsg");
+const myNameLabel = document.getElementById("myNameLabel");
+const myTimeVal = document.getElementById("myTimeVal");
+const statusBanner = document.getElementById("statusBanner");
+const stage = document.getElementById("stage");
+
+// Persistent session: saved on this device so that locking the phone,
+// losing signal for a while, or reloading the page doesn't reset your
+// name or your remaining time. You simply reconnect as the same person.
+let myId = localStorage.getItem("chesstalk_id") || null;
+let myCode = localStorage.getItem("chesstalk_code") || null;
+let myName = localStorage.getItem("chesstalk_name") || "";
+let prevCanSpeak = false;
+const edgeGlow = document.getElementById("edgeGlow");
+const reconnectBanner = document.getElementById("reconnectBanner");
+
+function saveSession(){
+  if(myId) localStorage.setItem("chesstalk_id", myId);
+  if(myCode) localStorage.setItem("chesstalk_code", myCode);
+  if(myName) localStorage.setItem("chesstalk_name", myName);
+}
+function clearSession(){
+  myId = null; myCode = null;
+  localStorage.removeItem("chesstalk_id");
+  localStorage.removeItem("chesstalk_code");
+  localStorage.removeItem("chesstalk_name");
+}
+
+// Pre-fill the join form with whatever we remember, purely for convenience
+// if a silent rejoin below doesn't succeed (e.g. the server restarted).
+if(myCode) document.getElementById("codeInput").value = myCode;
+if(myName) document.getElementById("nameInput").value = myName;
+
+/* ---------- Sound alerts (Web Audio, no external files) ---------- */
+let audioCtx = null;
+function getAudioCtx(){
+  if(!audioCtx){
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+  }
+  if(audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+function beep(freq, duration, delay, vol){
+  try{
+    const ctx = getAudioCtx();
+    const t0 = ctx.currentTime + (delay || 0);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.value = vol || 0.18;
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + duration/1000);
+  }catch(e){ /* sound isn't critical, fail silently */ }
+}
+function chimeYourTurn(){ beep(660,140,0); beep(880,180,0.15); }
+function pingHandRaised(){ beep(1100,90,0,0.14); }
+function tickLowTime(){ beep(420,120,0,0.16); }
+
+function attemptJoin(code, name, token, silent){
+  socket.emit("join-room", { code, name, token }, (res)=>{
+    if(!res.ok){
+      reconnectBanner.classList.add("hidden");
+      if(silent){
+        // The saved session is no longer valid (server restarted, room
+        // gone, etc.) — fall back to showing the join screen normally.
+        clearSession();
+        return;
+      }
+      errorMsg.textContent = res.error || "No s'ha pogut unir a la sessió.";
+      return;
+    }
+    myId = res.id;
+    myCode = code;
+    myName = name || myName;
+    saveSession();
+    myNameLabel.textContent = myName;
+    joinScreen.classList.add("hidden");
+    controlScreen.classList.remove("hidden");
+    reconnectBanner.classList.add("hidden");
+  });
+}
+
+document.getElementById("joinBtn").addEventListener("click", ()=>{
+  const code = document.getElementById("codeInput").value.trim();
+  const name = document.getElementById("nameInput").value.trim();
+  errorMsg.textContent = "";
+  if(!code){ errorMsg.textContent = "Introdueix el codi de sessió."; return; }
+  if(!name){ errorMsg.textContent = "Introdueix el teu nom."; return; }
+
+  getAudioCtx(); // unlock audio with this user gesture
+
+  const token = (myCode === code) ? myId : null;
+  attemptJoin(code, name, token, false);
+});
+
+// Fires on the very first connection AND every time the socket reconnects
+// after a drop (phone locked, wifi hiccup, tab backgrounded...). If we
+// already have a saved session, rejoin silently instead of showing the
+// join screen — the user just keeps their spot without doing anything.
+socket.on("connect", ()=>{
+  if(myId && myCode){
+    reconnectBanner.classList.remove("hidden");
+    attemptJoin(myCode, myName, myId, true);
+  }
+});
+
+socket.on("disconnect", ()=>{
+  if(myId) reconnectBanner.classList.remove("hidden");
+});
+
+let toastTimer = null;
+function showToast(text){
+  const toast = document.getElementById("toast");
+  toast.textContent = text;
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> toast.classList.remove("show"), 2200);
+}
+
+socket.on("your-turn", ()=>{ chimeYourTurn(); showToast("🎙️ És el teu torn de parlar"); });
+socket.on("hand-raised-notice", (data)=>{ pingHandRaised(); showToast(`✋ ${data && data.name ? data.name : 'Algú'} vol intervenir`); });
+socket.on("low-time-warning", ()=>{ tickLowTime(); showToast("⏳ Et queda poc temps"); });
+
+socket.on("kicked", ()=>{
+  clearSession();
+  controlScreen.classList.add("hidden");
+  joinScreen.classList.remove("hidden");
+  reconnectBanner.classList.add("hidden");
+  document.getElementById("codeInput").value = "";
+  errorMsg.textContent = "El host t'ha tret de la sessió.";
+});
+
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec/60).toString().padStart(2,"0");
+  const s = (sec%60).toString().padStart(2,"0");
+  return `${m}:${s}`;
+}
+
+function pressSpeak(){ socket.emit("press-speak"); }
+function pressStop(){ socket.emit("press-stop"); }
+function toggleHand(isRaised){ socket.emit(isRaised ? "lower-hand" : "raise-hand"); }
+
+socket.on("state", (state)=>{
+  if(!myId) return;
+  const me = state.participants.find(p=>p.id===myId);
+  if(!me) return;
+
+  const mySpeaking = state.speakerId === myId;
+  const othersSpeaking = state.speakerId !== null && !mySpeaking;
+  const myHandRaised = state.queue.includes(myId);
+
+  myTimeVal.textContent = fmt(me.remaining);
+  myTimeVal.classList.toggle("low", me.remaining <= 20);
+
+  if(mySpeaking){
+    statusBanner.className = "status-banner banner-speaking";
+    statusBanner.textContent = "🎙️ És el teu torn — estàs parlant";
+  } else if(othersSpeaking && myHandRaised){
+    statusBanner.className = "status-banner banner-raised";
+    statusBanner.textContent = `✋ Has aixecat la mà — ets el número ${state.queue.indexOf(myId)+1} a la cua`;
+  } else if(othersSpeaking){
+    statusBanner.className = "status-banner banner-listening";
+    statusBanner.textContent = "🔈 Algú altre està parlant";
+  } else {
+    statusBanner.className = "status-banner banner-open";
+    statusBanner.textContent = "🟢 El torn és lliure — pots parlar";
+  }
+
+  // Edge color: green while you can speak (floor open or already speaking),
+  // amber if your hand is raised and waiting, red if you must stay silent.
+  const canSpeak = mySpeaking || !othersSpeaking;
+  let edgeState = "red";
+  if(canSpeak) edgeState = "green";
+  else if(myHandRaised) edgeState = "amber";
+
+  edgeGlow.classList.remove("state-green", "state-amber", "state-red");
+  edgeGlow.classList.add(`state-${edgeState}`);
+  if(canSpeak && !prevCanSpeak){
+    edgeGlow.classList.add("flash");
+    setTimeout(()=> edgeGlow.classList.remove("flash"), 1100);
+  }
+  prevCanSpeak = canSpeak;
+
+  if(mySpeaking){
+    stage.innerHTML = `
+      <div class="big-timer">${fmt(me.remaining)}</div>
+      <button class="btn btn-stop" id="stopBtn"><span class="emoji">⏹️</span> Parar</button>
+    `;
+    document.getElementById("stopBtn").onclick = pressStop;
+  } else if(othersSpeaking){
+    stage.innerHTML = `
+      <button class="btn btn-speak" disabled><span class="emoji">🎤</span> Parlar</button>
+      <button class="btn btn-hand ${myHandRaised ? 'raised':''}" id="handBtn">
+        <span class="emoji">✋</span> ${myHandRaised ? "Baixar la mà" : "Aixecar la mà"}
+      </button>
+      ${myHandRaised ? `<div class="queue-pos">Se t'avisarà quan sigui el teu torn</div>` : ''}
+    `;
+    document.getElementById("handBtn").onclick = ()=>toggleHand(myHandRaised);
+  } else {
+    stage.innerHTML = `
+      <button class="btn btn-speak" id="speakBtn"><span class="emoji">🎤</span> Parlar</button>
+    `;
+    document.getElementById("speakBtn").onclick = pressSpeak;
+  }
+});
+</script>
+</body>
+</html>
